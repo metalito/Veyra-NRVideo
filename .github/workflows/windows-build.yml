@@ -47,19 +47,31 @@ jobs:
 
       # Speeds up re-runs. Restored files are re-checked: vcpkg verifies package hashes,
       # the official zip is SHA-256 checked, and the final audit checks every file.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - id: cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             C:\VeyraBuild\vcpkg-archives
             C:\VeyraBuild\qt
             C:\VeyraBuild\downloads
-          key: veyra-win-${{ hashFiles('ci/windows-build/pins.psd1', 'ci/windows-build/lib/deps.ps1') }}
+          key: veyra-win-${{ hashFiles('ci/windows-build/pins.psd1') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: veyra-win-${{ hashFiles('ci/windows-build/pins.psd1') }}-
 
       - name: Build, package and audit
         shell: powershell
         env:
           VEYRA_PYTHON: ${{ steps.py.outputs.python-path }}
         run: .\ci\windows-build\2-build-veyra.ps1 -Root C:\VeyraBuild -CI
+
+      # Saved even when the build fails, so the next attempt skips the long dependency stage.
+      - if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            C:\VeyraBuild\vcpkg-archives
+            C:\VeyraBuild\qt
+            C:\VeyraBuild\downloads
+          key: veyra-win-${{ hashFiles('ci/windows-build/pins.psd1') }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Zip the package
         shell: powershell

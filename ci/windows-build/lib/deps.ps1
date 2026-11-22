@@ -31,7 +31,7 @@ function Install-VcpkgDeps($Pins, [string]$Root, [string]$Src) {
     try {
         Invoke-Checked (Join-Path $vcpkg 'vcpkg.exe') @('install', "--overlay-ports=$overlay",
             '--triplet', 'x64-windows', '--disable-metrics',
-            'ffmpeg[core,avcodec,avformat,avfilter,swresample,swscale,dav1d,zlib]')
+            'ffmpeg[core,avcodec,avformat,avfilter,swresample,swscale,dav1d,zlib]', 'pkgconf')
         Invoke-Checked (Join-Path $vcpkg 'vcpkg.exe') @('install', '--triplet', 'x64-windows-static-md',
             '--disable-metrics', 'openssl', 'opus', 'json-c', 'libevent', 'miniupnpc', 'curl',
             'protobuf', 'sdl3', 'zlib')

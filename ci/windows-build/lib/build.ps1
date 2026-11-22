@@ -6,6 +6,9 @@ function Invoke-VeyraBuild($Pins, [string]$Root, [string]$Src, [hashtable]$Paths
     $vcpkg = Join-Path $Root 'vcpkg'
     $protoc = Get-ChildItem -LiteralPath (Join-Path $vcpkg 'installed') -Recurse -Filter 'protoc.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $protoc) { throw 'protoc.exe not found in the vcpkg tree (protobuf install failed?)' }
+    # chiaki-ng uses pkg-config; this one is built from source by the pinned vcpkg (port pkgconf).
+    $pkgconf = Join-Path $vcpkg 'installed\x64-windows\tools\pkgconf\pkgconf.exe'
+    if (-not (Test-Path -LiteralPath $pkgconf)) { throw "pkgconf.exe not found at $pkgconf (vcpkg pkgconf install failed?)" }
     $cmakeArgs = @(
         '-S', $Src, '-B', $build, '-G', 'Ninja',
         '-DCMAKE_BUILD_TYPE=Release',
@@ -17,6 +20,7 @@ function Invoke-VeyraBuild($Pins, [string]$Root, [string]$Src, [hashtable]$Paths
         "-DPython_EXECUTABLE=$($Paths.Python)",
         "-DPYTHON_EXECUTABLE=$($Paths.Python)",
         "-DPROTOC=$($protoc.FullName)",
+        "-DPKG_CONFIG_EXECUTABLE=$pkgconf",
         '-DVEYRA_BUILD_QML_UI=ON',
         '-DVEYRA_ENABLE_REMOTEPLAY=ON',
         "-DVEYRA_RP_CHIAKI_SOURCE_DIR=$($Paths.ChiakiStage)",
