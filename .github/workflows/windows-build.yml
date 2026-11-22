@@ -1,0 +1,95 @@
+# Builds this fork (Veyra 2.2.0 + PSN Account ID fix) for Windows on a GitHub-hosted runner,
+# using the same pinned, audited scripts as a local build (ci/windows-build).
+# Every action is pinned to a full commit SHA. No secrets are used.
+name: Windows build (fork)
+
+on:
+  push:
+    branches: [ci/windows-build]
+    paths:
+      - 'ci/windows-build/**'
+      - '.github/workflows/windows-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 340
+    permissions:
+      contents: read
+      id-token: write       # signs the build provenance attestation
+      attestations: write   # stores it on this repository
+    env:
+      VCPKG_DISABLE_METRICS: '1'
+      VCPKG_DEFAULT_BINARY_CACHE: C:\VeyraBuild\vcpkg-archives
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - id: py
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+
+      - name: Prepare folders
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\VeyraBuild\vcpkg-archives | Out-Null
+          Get-PSDrive -PSProvider FileSystem | Format-Table Name, @{n='FreeGB';e={[math]::Round($_.Free/1GB)}}
+
+      # Speeds up re-runs. Restored files are re-checked: vcpkg verifies package hashes,
+      # the official zip is SHA-256 checked, and the final audit checks every file.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            C:\VeyraBuild\vcpkg-archives
+            C:\VeyraBuild\qt
+            C:\VeyraBuild\downloads
+          key: veyra-win-${{ hashFiles('ci/windows-build/pins.psd1', 'ci/windows-build/lib/deps.ps1') }}
+
+      - name: Build, package and audit
+        shell: powershell
+        env:
+          VEYRA_PYTHON: ${{ steps.py.outputs.python-path }}
+        run: .\ci\windows-build\2-build-veyra.ps1 -Root C:\VeyraBuild -CI
+
+      - name: Zip the package
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-Location C:\VeyraBuild\dist
+          & "$env:windir\System32\tar.exe" -a -c -f C:\VeyraBuild\Veyra-2.2.0-metalito-win64.zip Veyra-2.2.0-metalito audit-report.txt
+          if ($LASTEXITCODE -ne 0) { throw "zip failed: $LASTEXITCODE" }
+          Get-FileHash C:\VeyraBuild\Veyra-2.2.0-metalito-win64.zip, C:\VeyraBuild\dist\Veyra-2.2.0-metalito\veyra_qml_ui.exe |
+            ForEach-Object { "$($_.Hash)  $(Split-Path -Leaf $_.Path)" } | Tee-Object C:\VeyraBuild\SHA256SUMS.txt
+
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            C:\VeyraBuild\Veyra-2.2.0-metalito-win64.zip
+            C:\VeyraBuild\dist\Veyra-2.2.0-metalito\veyra_qml_ui.exe
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Veyra-2.2.0-metalito-win64
+          path: |
+            C:\VeyraBuild\Veyra-2.2.0-metalito-win64.zip
+            C:\VeyraBuild\SHA256SUMS.txt
+            C:\VeyraBuild\dist\audit-report.txt
+          compression-level: 0
+          retention-days: 30
+
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: build-logs
+          path: C:\VeyraBuild\logs
+          retention-days: 14
