@@ -6,6 +6,8 @@ function Invoke-VeyraBuild($Pins, [string]$Root, [string]$Src, [hashtable]$Paths
     $vcpkg = Join-Path $Root 'vcpkg'
     $protoc = Get-ChildItem -LiteralPath (Join-Path $vcpkg 'installed') -Recurse -Filter 'protoc.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $protoc) { throw 'protoc.exe not found in the vcpkg tree (protobuf install failed?)' }
+    # chiaki-ng's nanopb generator runs "protoc" by name: use the pinned vcpkg one.
+    $env:PATH = (Split-Path -Parent $protoc.FullName) + ';' + $env:PATH
     # chiaki-ng uses pkg-config; this one is built from source by the pinned vcpkg (port pkgconf).
     $pkgconf = Join-Path $vcpkg 'installed\x64-windows\tools\pkgconf\pkgconf.exe'
     if (-not (Test-Path -LiteralPath $pkgconf)) { throw "pkgconf.exe not found at $pkgconf (vcpkg pkgconf install failed?)" }
